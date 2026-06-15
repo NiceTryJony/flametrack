@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  style-src 'unsafe-inline';
+  script-src 'unsafe-inline';
+  img-src data:;
+">
+<title>FlameTrack</title>
+<style>
+  /* ── Design tokens ────────────────────────────────────────────────────── */
+  :root {
+    --bg:          #0e0e10;
+    --bg-card:     #16161a;
+    --bg-card-2:   #1c1c22;
+    --border:      #2a2a35;
+    --text:        #e8e8f0;
+    --text-muted:  #6e6e82;
+    --text-dim:    #3e3e52;
+    --flame-1:     #ff6b2b;   /* base orange */
+    --flame-2:     #ff8c00;
+    --flame-3:     #ffb700;
+    --accent:      #ff6b2b;
+    --green:       #3dd68c;
+    --heat-0:      #1a1a22;
+    --heat-1:      #3d1f0d;
+    --heat-2:      #7a3510;
+    --heat-3:      #c05015;
+    --heat-4:      #ff6b2b;
+    --heat-5:      #ffb347;
+    --radius:      10px;
+    --font:        "SF Mono", "Fira Code", "Cascadia Code", monospace;
+    --font-ui:     -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  /* ── Reset & base ─────────────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Layout ───────────────────────────────────────────────────────────── */
+  .root {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 32px 24px 64px;
+  }
+
+  /* ── Header ───────────────────────────────────────────────────────────── */
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 40px;
+  }
+
+  .logo {
+    font-size: 40px;
+    line-height: 1;
+    filter: drop-shadow(0 0 16px rgba(255,107,43,0.7));
+    animation: pulse 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { filter: drop-shadow(0 0 16px rgba(255,107,43,0.7)); }
+    50%       { filter: drop-shadow(0 0 28px rgba(255,183,0,0.9)); }
+  }
+
+  .header-text h1 {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, var(--flame-1), var(--flame-3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header-text p {
+    color: var(--text-muted);
+    font-size: 13px;
+    margin-top: 2px;
+  }
+
+  /* ── Streak hero ──────────────────────────────────────────────────────── */
+  .streak-hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .streak-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .streak-card.current::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 0% 100%, rgba(255,107,43,0.12) 0%, transparent 65%);
+    pointer-events: none;
+  }
+
+  .streak-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .streak-number {
+    font-size: 64px;
+    font-weight: 800;
+    line-height: 1;
+    font-family: var(--font);
+    background: linear-gradient(135deg, var(--flame-1), var(--flame-3));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    transition: all 0.4s ease;
+  }
+
+  .streak-card.best .streak-number {
+    background: linear-gradient(135deg, #888, #ccc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .streak-suffix {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  /* Flame row (decorative) */
+  .flames-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    font-size: 20px;
+  }
+
+  .flame-icon {
+    opacity: 0.3;
+    transition: opacity 0.3s, transform 0.3s;
+  }
+  .flame-icon.lit {
+    opacity: 1;
+    animation: flicker 2s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 0.15s);
+  }
+  @keyframes flicker {
+    0%, 100% { transform: scaleY(1) scaleX(1); }
+    25%       { transform: scaleY(1.06) scaleX(0.97); }
+    75%       { transform: scaleY(0.95) scaleX(1.02); }
+  }
+
+  /* ── Stats row ────────────────────────────────────────────────────────── */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .stat-chip {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    text-align: center;
+  }
+
+  .stat-chip .value {
+    font-size: 28px;
+    font-weight: 700;
+    font-family: var(--font);
+    color: var(--text);
+  }
+
+  .stat-chip .name {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-top: 4px;
+  }
+
+  /* ── Section headers ──────────────────────────────────────────────────── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+
+  .section-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+  }
+
+  /* ── Heatmap ──────────────────────────────────────────────────────────── */
+  .heatmap-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 28px;
+  }
+
+  .heatmap-scroll {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .heatmap-grid {
+    display: flex;
+    gap: 3px;
+    align-items: flex-start;
+  }
+
+  .heatmap-col {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .heatmap-cell {
+    width: 11px;
+    height: 11px;
+    border-radius: 2px;
+    background: var(--heat-0);
+    cursor: default;
+    transition: transform 0.1s;
+    flex-shrink: 0;
+  }
+
+  .heatmap-cell:hover { transform: scale(1.4); z-index: 1; }
+  .heatmap-cell[data-v="1"] { background: var(--heat-1); }
+  .heatmap-cell[data-v="2"] { background: var(--heat-2); }
+  .heatmap-cell[data-v="3"] { background: var(--heat-3); }
+  .heatmap-cell[data-v="4"] { background: var(--heat-4); }
+  .heatmap-cell[data-v="5"] { background: var(--heat-5); }
+
+  .heatmap-tooltip {
+    position: fixed;
+    background: #222;
+    color: var(--text);
+    font-size: 11px;
+    padding: 5px 8px;
+    border-radius: 5px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 100;
+    white-space: nowrap;
+    border: 1px solid var(--border);
+  }
+
+  .heatmap-months {
+    display: flex;
+    gap: 3px;
+    margin-bottom: 6px;
+    padding-left: 0;
+  }
+
+  .heatmap-month-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    font-family: var(--font);
+    flex-shrink: 0;
+  }
+
+  /* ── Bar chart ────────────────────────────────────────────────────────── */
+  .chart-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 28px;
+  }
+
+  .bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 80px;
+  }
+
+  .bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .bar {
+    width: 100%;
+    background: var(--heat-3);
+    border-radius: 3px 3px 0 0;
+    transition: height 0.6s cubic-bezier(0.34,1.56,0.64,1), background 0.2s;
+    min-height: 2px;
+    cursor: default;
+    position: relative;
+  }
+
+  .bar.today { background: var(--flame-1); }
+  .bar:hover { background: var(--flame-3); }
+
+  .bar-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    font-family: var(--font);
+    text-align: center;
+    line-height: 1;
+  }
+  .bar-label.today-lbl { color: var(--flame-2); font-weight: 600; }
+
+  /* ── Activity feed ────────────────────────────────────────────────────── */
+  .feed-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 28px;
+  }
+
+  .feed-empty {
+    color: var(--text-muted);
+    font-size: 13px;
+    text-align: center;
+    padding: 20px 0;
+  }
+
+  .feed-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .feed-item:last-child { border-bottom: none; }
+
+  .feed-icon {
+    font-size: 16px;
+    line-height: 1.4;
+    flex-shrink: 0;
+  }
+
+  .feed-main { flex: 1; min-width: 0; }
+
+  .feed-cmd {
+    font-family: var(--font);
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .feed-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .feed-time {
+    font-family: var(--font);
+    font-size: 11px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+  }
+
+  /* ── Actions ──────────────────────────────────────────────────────────── */
+  .actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    font-family: var(--font-ui);
+  }
+
+  .btn-primary {
+    background: var(--flame-1);
+    color: #fff;
+    border-color: var(--flame-2);
+  }
+  .btn-primary:hover { background: var(--flame-2); }
+  .btn-primary:active { transform: scale(0.97); }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text-muted);
+    border-color: var(--border);
+  }
+  .btn-secondary:hover { color: var(--text); border-color: var(--text-muted); }
+
+  /* ── Today badge ──────────────────────────────────────────────────────── */
+  .today-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .today-badge.active {
+    background: rgba(61,214,140,0.15);
+    color: var(--green);
+  }
+  .today-badge.inactive {
+    background: rgba(255,107,43,0.12);
+    color: var(--flame-1);
+  }
+
+  /* ── Tech pills ───────────────────────────────────────────────────────── */
+  .tech-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  .tech-pill {
+    background: var(--bg-card-2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font);
+  }
+
+  /* ── Celebration overlay ─────────────────────────────────────────────── */
+  .celebrate {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 999;
+  }
+
+  .confetti-piece {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    animation: fall linear forwards;
+  }
+
+  @keyframes fall {
+    from { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+    to   { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+  }
+
+  /* ── Scrollbar ────────────────────────────────────────────────────────── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Loading state ────────────────────────────────────────────────────── */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--text-muted);
+    font-size: 24px;
+    animation: spin 1.5s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="root" id="app">
+  <div class="loading">🔥</div>
+</div>
+
+<div class="heatmap-tooltip" id="tooltip"></div>
+<div class="celebrate" id="celebrate"></div>
+
+<script>
+// ── VS Code API ──────────────────────────────────────────────────────────────
+const vscode = acquireVsCodeApi();
+
+// ── State ────────────────────────────────────────────────────────────────────
+let appData = null;
+
+// ── Entry point ──────────────────────────────────────────────────────────────
+window.addEventListener("message", (event) => {
+  const msg = event.data;
+  switch (msg.type) {
+    case "data":
+      appData = msg.payload;
+      render(appData);
+      break;
+    case "export_ready":
+      // Data is already being opened as a doc by the extension host
+      break;
+  }
+});
+
+// Request initial data
+vscode.postMessage({ type: "request_data" });
+
+// ── Render ───────────────────────────────────────────────────────────────────
+function render(data) {
+  const app = document.getElementById("app");
+  const today = todayString();
+  const activatedToday = data.activity[today] !== undefined;
+  const totalDays = Object.keys(data.activity).length;
+  const totalEvents = Object.values(data.activity)
+    .reduce((sum, d) => sum + d.events.length, 0);
+
+  // Compute top techs
+  const techMap = {};
+  Object.values(data.activity).forEach(d => {
+    d.events.forEach(ev => {
+      if (ev.tech) techMap[ev.tech] = (techMap[ev.tech] || 0) + 1;
+    });
+  });
+  const topTechs = Object.entries(techMap)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 6)
+    .map(([t]) => t);
+
+  // Collect recent events (last 20)
+  const recentEvents = Object.values(data.activity)
+    .flatMap(d => d.events)
+    .sort((a,b) => b.ts - a.ts)
+    .slice(0, 20);
+
+  app.innerHTML = `
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">🔥</div>
+      <div class="header-text">
+        <h1>FlameTrack</h1>
+        <p>Real coding streaks — earned, not given</p>
+      </div>
+      <div>
+        <span class="today-badge ${activatedToday ? 'active' : 'inactive'}">
+          ${activatedToday ? '✅ Today logged' : '⏳ Not yet today'}
+        </span>
+      </div>
+    </div>
+
+    <!-- Streak hero -->
+    <div class="streak-hero">
+      <div class="streak-card current">
+        <div class="streak-label">Current Streak</div>
+        <div class="streak-number" id="streakNum">${data.currentStreak}</div>
+        <div class="streak-suffix">day${data.currentStreak !== 1 ? 's' : ''} in a row</div>
+        <div class="flames-row">${renderFlames(data.currentStreak)}</div>
+      </div>
+      <div class="streak-card best">
+        <div class="streak-label">Best Streak</div>
+        <div class="streak-number">${data.bestStreak}</div>
+        <div class="streak-suffix">personal record</div>
+        ${topTechs.length ? `<div class="tech-row">${topTechs.map(t => `<span class="tech-pill">${t}</span>`).join('')}</div>` : ''}
+      </div>
+    </div>
+
+    <!-- Stats chips -->
+    <div class="stats-row">
+      <div class="stat-chip">
+        <div class="value">${totalDays}</div>
+        <div class="name">Active Days</div>
+      </div>
+      <div class="stat-chip">
+        <div class="value">${totalEvents}</div>
+        <div class="name">Total Events</div>
+      </div>
+      <div class="stat-chip">
+        <div class="value">${calcThisWeek(data.activity)}</div>
+        <div class="name">This Week</div>
+      </div>
+    </div>
+
+    <!-- Heatmap -->
+    <div class="heatmap-section">
+      <div class="section-header">
+        <span class="section-title">Activity — Last 12 Months</span>
+      </div>
+      <div class="heatmap-scroll" id="heatmapContainer"></div>
+    </div>
+
+    <!-- Weekly bar chart -->
+    <div class="chart-section">
+      <div class="section-header">
+        <span class="section-title">Last 4 Weeks</span>
+      </div>
+      <div class="bar-chart" id="barChart"></div>
+    </div>
+
+    <!-- Recent activity feed -->
+    <div class="feed-section">
+      <div class="section-header">
+        <span class="section-title">Recent Activity</span>
+      </div>
+      <div id="feedList">
+        ${recentEvents.length === 0
+          ? '<div class="feed-empty">No activity yet — run some code! 🚀</div>'
+          : recentEvents.map(renderFeedItem).join('')}
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button class="btn btn-primary" onclick="markToday()">
+        ✋ Mark Today
+      </button>
+      <button class="btn btn-secondary" onclick="exportMd()">
+        📤 Export Markdown
+      </button>
+    </div>
+  `;
+
+  // Render heatmap (requires DOM to be ready)
+  renderHeatmap(data.activity);
+  renderBarChart(data.activity);
+
+  // Animate streak number counting up
+  animateCounter("streakNum", 0, data.currentStreak, 600);
+}
+
+// ── Flames row ───────────────────────────────────────────────────────────────
+function renderFlames(streak) {
+  const total = 7;
+  const lit = Math.min(streak, total);
+  return Array.from({ length: total }, (_, i) =>
+    `<span class="flame-icon${i < lit ? ' lit' : ''}" style="--i:${i}">🔥</span>`
+  ).join('');
+}
+
+// ── Heatmap ──────────────────────────────────────────────────────────────────
+function renderHeatmap(activity) {
+  const container = document.getElementById("heatmapContainer");
+  if (!container) return;
+
+  const tooltip = document.getElementById("tooltip");
+
+  // Build 52 weeks of data, ending today
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  // Start from 52 weeks ago, padded to start on Sunday
+  const start = new Date(today);
+  start.setDate(start.getDate() - 364);
+  // Pad to Sunday
+  start.setDate(start.getDate() - start.getDay());
+
+  const weeks = [];
+  let cursor = new Date(start);
+
+  while (cursor <= today) {
+    const week = [];
+    for (let d = 0; d < 7; d++) {
+      week.push(new Date(cursor));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    weeks.push(week);
+  }
+
+  // Build HTML
+  const grid = document.createElement("div");
+  grid.className = "heatmap-grid";
+
+  weeks.forEach(week => {
+    const col = document.createElement("div");
+    col.className = "heatmap-col";
+
+    week.forEach(day => {
+      const cell = document.createElement("div");
+      cell.className = "heatmap-cell";
+      const ds = dateString(day);
+      const rec = activity[ds];
+      const count = rec ? rec.events.length : 0;
+      const heat = count === 0 ? 0 : count === 1 ? 2 : count <= 3 ? 3 : count <= 5 ? 4 : 5;
+      if (heat > 0) cell.setAttribute("data-v", heat);
+      if (ds === todayString()) {
+        cell.style.outline = "1px solid var(--flame-1)";
+        cell.style.outlineOffset = "1px";
+      }
+
+      cell.addEventListener("mouseenter", (e) => {
+        tooltip.textContent = count
+          ? `${ds}: ${count} event${count !== 1 ? 's' : ''}`
+          : `${ds}: no activity`;
+        tooltip.style.opacity = "1";
+        tooltip.style.left = (e.clientX + 12) + "px";
+        tooltip.style.top  = (e.clientY - 24) + "px";
+      });
+      cell.addEventListener("mouseleave", () => {
+        tooltip.style.opacity = "0";
+      });
+
+      col.appendChild(cell);
+    });
+
+    grid.appendChild(col);
+  });
+
+  container.innerHTML = "";
+  container.appendChild(grid);
+}
+
+// ── Bar chart (last 28 days) ──────────────────────────────────────────────────
+function renderBarChart(activity) {
+  const chart = document.getElementById("barChart");
+  if (!chart) return;
+
+  const days = 28;
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  const entries = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const ds = dateString(d);
+    const count = activity[ds]?.events?.length ?? 0;
+    entries.push({ ds, count, isToday: i === 0, dayLabel: dayLabel(d) });
+  }
+
+  const max = Math.max(...entries.map(e => e.count), 1);
+
+  chart.innerHTML = entries.map(e => {
+    const pct = Math.round((e.count / max) * 100);
+    const heightPx = Math.max(pct * 0.8, e.count > 0 ? 4 : 2);
+    return `
+      <div class="bar-col">
+        <div class="bar${e.isToday ? ' today' : ''}"
+          style="height:${heightPx}px"
+          title="${e.ds}: ${e.count} event${e.count!==1?'s':''}">
+        </div>
+        <div class="bar-label${e.isToday ? ' today-lbl' : ''}">${e.dayLabel}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Feed item ─────────────────────────────────────────────────────────────────
+function renderFeedItem(ev) {
+  const icons = { git: "📤", manual: "✋", terminal: "✅" };
+  const icon = icons[ev.kind] || "✅";
+  const time = relativeTime(ev.ts);
+  const ws = ev.workspace ? `<span>${ev.workspace}</span>` : "";
+  const tech = ev.tech ? ` · <span>${ev.tech}</span>` : "";
+  return `
+    <div class="feed-item">
+      <div class="feed-icon">${icon}</div>
+      <div class="feed-main">
+        <div class="feed-cmd" title="${escHtml(ev.label)}">${escHtml(ev.label)}</div>
+        <div class="feed-meta">${ws}${tech}</div>
+      </div>
+      <div class="feed-time">${time}</div>
+    </div>
+  `;
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+function markToday() {
+  vscode.postMessage({ type: "mark_today_manual" });
+  celebrate();
+}
+
+function exportMd() {
+  vscode.postMessage({ type: "export_markdown" });
+}
+
+// ── Confetti celebration ──────────────────────────────────────────────────────
+function celebrate() {
+  const el = document.getElementById("celebrate");
+  const colors = ["#ff6b2b","#ff8c00","#ffb700","#fff","#3dd68c"];
+  const pieces = Array.from({ length: 35 }, (_, i) => {
+    const piece = document.createElement("div");
+    piece.className = "confetti-piece";
+    piece.style.cssText = `
+      left: ${Math.random() * 100}vw;
+      top: 0;
+      background: ${colors[i % colors.length]};
+      animation-duration: ${0.8 + Math.random() * 1.2}s;
+      animation-delay: ${Math.random() * 0.4}s;
+      transform: rotate(${Math.random() * 360}deg);
+    `;
+    return piece;
+  });
+  el.innerHTML = "";
+  pieces.forEach(p => el.appendChild(p));
+  setTimeout(() => { el.innerHTML = ""; }, 2500);
+}
+
+// ── Counter animation ─────────────────────────────────────────────────────────
+function animateCounter(id, from, to, ms) {
+  if (from === to) return;
+  const el = document.getElementById(id);
+  if (!el) return;
+  const steps = 20;
+  const step = (to - from) / steps;
+  let cur = from;
+  let count = 0;
+  const iv = setInterval(() => {
+    cur += step;
+    count++;
+    el.textContent = Math.round(cur);
+    if (count >= steps) { el.textContent = to; clearInterval(iv); }
+  }, ms / steps);
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function todayString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function dateString(d) {
+  return d.toISOString().slice(0, 10);
+}
+
+function dayLabel(d) {
+  const days = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+  return days[d.getDay()];
+}
+
+function calcThisWeek(activity) {
+  let count = 0;
+  const today = new Date();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    if (activity[dateString(d)]) count++;
+  }
+  return count;
+}
+
+function relativeTime(ts) {
+  const diff = Date.now() - ts;
+  if (diff < 60000) return "just now";
+  if (diff < 3600000) return Math.floor(diff/60000) + "m ago";
+  if (diff < 86400000) return Math.floor(diff/3600000) + "h ago";
+  const days = Math.floor(diff/86400000);
+  return days + "d ago";
+}
+
+function escHtml(s) {
+  return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+</script>
+</body>
+</html>

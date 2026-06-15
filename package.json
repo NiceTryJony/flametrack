@@ -1,0 +1,105 @@
+{
+  "name": "flametrack",
+  "displayName": "FlameTrack 🔥",
+  "description": "Real coding streaks — earned by successful builds, tests, and deploys. Not by staring at your editor.",
+  "version": "0.1.0",
+  "publisher": "your-publisher-id",
+  "engines": {
+    "vscode": "^1.93.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization",
+    "Education"
+  ],
+  "keywords": [
+    "streak",
+    "productivity",
+    "gamification",
+    "motivation",
+    "tracking",
+    "heatmap",
+    "flametrack",
+    "record",
+    "check"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "flametrack.openStats",
+        "title": "FlameTrack: Open Stats Panel",
+        "icon": "🔥"
+      },
+      {
+        "command": "flametrack.markToday",
+        "title": "FlameTrack: Mark Today as Active",
+        "icon": "✋"
+      },
+      {
+        "command": "flametrack.exportMarkdown",
+        "title": "FlameTrack: Export Stats to Markdown"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "flametrack.openStats",
+        "key": "ctrl+alt+f",
+        "mac": "cmd+alt+f"
+      }
+    ],
+    "configuration": {
+      "title": "FlameTrack",
+      "properties": {
+        "flametrack.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable FlameTrack tracking"
+        },
+        "flametrack.showNotifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notifications when a productive action is logged"
+        },
+        "flametrack.notifyOnlyFirstOfDay": {
+          "type": "boolean",
+          "default": true,
+          "description": "Only show notification for the first logged action of the day"
+        },
+        "flametrack.streak.minActiveMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "description": "Minimum active coding minutes in a day for it to count toward your streak (independent of builds/tests)"
+        },
+        "flametrack.streak.minLinesAdded": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "description": "Minimum lines added in a day for it to count toward your streak (independent of builds/tests)"
+        },
+        "flametrack.streak.weekendFreeze": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically protect your streak on Saturdays and Sundays — skipped weekends won't break the chain even if you don't code"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node esbuild.mjs --production",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "lint": "eslint src --ext .ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/vscode": "^1.93.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  }
+}
