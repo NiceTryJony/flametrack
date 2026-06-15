@@ -1,9 +1,10 @@
 {
   "name": "flametrack",
   "displayName": "FlameTrack 🔥",
-  "description": "Real coding streaks — earned by successful builds, tests, and deploys. Not by staring at your editor.",
+  "description": "Real coding streaks - earned by successful builds, tests, and deploys. Not by staring at your editor.",
   "version": "0.1.0",
-  "publisher": "your-publisher-id",
+  "publisher": "flametrack",
+  "icon":"assets/icon.png",
   "engines": {
     "vscode": "^1.93.0"
   },
